@@ -1,4 +1,3 @@
-import json
 import uuid
 import boto3
 import streamlit as st
@@ -29,7 +28,7 @@ if APP_PASSWORD:
         st.stop()
 
 st.title("AgentCore Chat")
-st.caption("Simple Streamlit UI for Amazon Bedrock AgentCore")
+st.caption("Simple Streamlit UI for Amazon Bedrock AgentCore Harness")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -43,6 +42,8 @@ client = boto3.client(
     aws_access_key_id=st.secrets["AWS_ACCESS_KEY_ID"],
     aws_secret_access_key=st.secrets["AWS_SECRET_ACCESS_KEY"],
 )
+
+HARNESS_ARN = st.secrets["HARNESS_ARN"]
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
@@ -62,30 +63,37 @@ if prompt:
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                response = client.invoke_agent_runtime(
-                    agentRuntimeArn=st.secrets["AGENT_RUNTIME_ARN"],
+                response = client.invoke_harness(
+                    harnessArn=HARNESS_ARN,
                     runtimeSessionId=st.session_state.runtime_session_id,
-                    qualifier="DEFAULT",
-                    payload=json.dumps({
-                        "prompt": prompt
-                    }).encode("utf-8")
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "text": prompt
+                                }
+                            ]
+                        }
+                    ]
                 )
 
                 output = ""
 
-                for event in response.get("response", []):
-                    if isinstance(event, bytes):
-                        output += event.decode("utf-8")
-                    elif isinstance(event, dict):
-                        if "chunk" in event and "bytes" in event["chunk"]:
-                            output += event["chunk"]["bytes"].decode("utf-8")
-                        else:
-                            output += str(event)
-                    else:
-                        output += str(event)
+                for event in response.get("stream", []):
+                    if "contentBlockDelta" in event:
+                        delta = event["contentBlockDelta"].get("delta", {})
+                        if "text" in delta:
+                            output += delta["text"]
+
+                    elif "runtimeClientError" in event:
+                        output += f"\nError: {event['runtimeClientError'].get('message', '')}"
+
+                    elif "validationException" in event:
+                        output += f"\nValidation error: {event['validationException']}"
 
                 if not output:
-                    output = "No response from AgentCore."
+                    output = "No response from AgentCore Harness."
 
                 st.write(output)
 
@@ -95,4 +103,4 @@ if prompt:
                 })
 
             except Exception as e:
-                st.error(f"Error invoking AgentCore: {e}")
+                st.error(f"Error invoking AgentCore Harness: {e}")
