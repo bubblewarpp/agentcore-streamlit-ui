@@ -8,8 +8,8 @@ import botocore.exceptions
 import streamlit as st
 
 
-APP_TITLE = "Ask Toki-chan anything"
-APP_SUBTITLE = "Your memory-aware personal AI assistant."
+APP_TITLE = "Toki-chan"
+APP_SUBTITLE = "Memory-aware personal AI assistant"
 BRAND_NAME = "TOKAICOM Mitra Indonesia"
 MAX_UPLOAD_CHARS = 20_000
 
@@ -28,28 +28,13 @@ REQUIRED_SECRETS = (
     "HARNESS_ARN",
 )
 
-QUICK_ACTIONS = [
-    (
-        "Remember this",
-        "Help me capture a safe reusable memory. Ask what to remember if I have not provided the detail.",
-    ),
-    (
-        "What do you remember?",
-        "Retrieve and summarize relevant safe memory context.",
-    ),
-    (
-        "Forget a preference",
-        "Help me forget or mark inactive a memory or preference. Ask which memory if I have not provided it.",
-    ),
-    (
-        "Summarize this",
-        "Summarize the provided text or uploaded context clearly and concisely.",
-    ),
-    (
-        "Draft a message",
-        "Help me draft a clear, polished message. Ask for recipient, goal, and tone if needed.",
-    ),
-]
+QUICK_ACTIONS = {
+    "Remember this": "Store this as safe reusable memory if appropriate. Do not store secrets or confidential data: ",
+    "Recall memory": "Retrieve and summarize relevant safe memory context.",
+    "Forget": "Forget or mark inactive this memory/preference if supported: ",
+    "Summarize": "Summarize this clearly and concisely.",
+    "Draft": "Draft a clear, polished message. Ask for recipient, goal, and tone if needed.",
+}
 
 
 def load_css() -> None:
@@ -57,16 +42,14 @@ def load_css() -> None:
         """
         <style>
             :root {
-                --bg: #F6F8FB;
+                --bg: #F8FAFC;
                 --card: #FFFFFF;
                 --primary: #2563EB;
-                --primary-strong: #1D4ED8;
-                --lavender: #7C3AED;
-                --soft-blue: #EFF6FF;
+                --primary-soft: #EFF6FF;
                 --text: #0F172A;
                 --muted: #64748B;
                 --border: #E2E8F0;
-                --shadow: 0 24px 70px rgba(15, 23, 42, 0.08);
+                --shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
             }
 
             header[data-testid="stHeader"],
@@ -79,23 +62,22 @@ def load_css() -> None:
 
             .stApp {
                 background:
-                    radial-gradient(circle at 50% 14%, rgba(124, 58, 237, 0.16), transparent 14rem),
-                    radial-gradient(circle at 48% 42%, rgba(37, 99, 235, 0.12), transparent 18rem),
-                    radial-gradient(circle at 78% 78%, rgba(34, 197, 94, 0.08), transparent 18rem),
+                    radial-gradient(circle at 50% 2rem, rgba(124, 58, 237, 0.12), transparent 16rem),
+                    radial-gradient(circle at 74% 18rem, rgba(37, 99, 235, 0.10), transparent 18rem),
                     var(--bg);
                 color: var(--text);
             }
 
             .block-container {
-                max-width: 1160px;
-                padding: 1.05rem 2rem 2.4rem;
+                max-width: 980px;
+                min-height: 100vh;
+                padding: 1rem 1.6rem 6rem;
             }
 
             [data-testid="stSidebar"] {
-                width: 19.5rem;
+                width: 19rem;
                 border-right: 1px solid var(--border);
-                background: rgba(255, 255, 255, 0.84);
-                backdrop-filter: blur(18px);
+                background: #FFFFFF;
             }
 
             [data-testid="stSidebar"] > div:first-child {
@@ -108,35 +90,27 @@ def load_css() -> None:
                 font-size: 0.84rem;
             }
 
-            [data-testid="stSidebar"] hr {
-                margin: 0.8rem 0;
-                border-color: var(--border);
-            }
-
             .sidebar-section {
                 color: var(--text);
-                font-size: 0.75rem;
+                font-size: 0.74rem;
                 font-weight: 800;
                 letter-spacing: 0.08em;
-                text-transform: uppercase;
                 margin: 1rem 0 0.35rem;
+                text-transform: uppercase;
             }
 
             .sidebar-brand {
                 display: flex;
                 align-items: center;
-                gap: 0.65rem;
-                margin-bottom: 0.9rem;
-            }
-
-            .sidebar-brand-copy {
-                line-height: 1.2;
+                gap: 0.6rem;
+                margin-bottom: 0.8rem;
             }
 
             .sidebar-brand-title {
                 color: var(--text);
-                font-size: 0.9rem;
+                font-size: 0.88rem;
                 font-weight: 800;
+                line-height: 1.2;
             }
 
             .sidebar-brand-subtitle {
@@ -147,226 +121,166 @@ def load_css() -> None:
 
             .tokai-logo {
                 display: block;
-                width: 8.2rem;
+                width: 7.4rem;
                 height: auto;
             }
 
             .tokai-logo-sidebar {
-                width: 6.8rem;
+                width: 5.9rem;
             }
 
-            .top-status {
+            .chat-header {
+                position: sticky;
+                top: 0;
+                z-index: 5;
+                padding: 0.75rem 0 0.85rem;
+                background: linear-gradient(180deg, rgba(248, 250, 252, 0.97), rgba(248, 250, 252, 0.86));
+                backdrop-filter: blur(12px);
+                border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+            }
+
+            .chat-header-row {
                 display: flex;
                 align-items: center;
-                justify-content: center;
-                gap: 0.5rem;
+                justify-content: space-between;
+                gap: 1rem;
+            }
+
+            .chat-title {
+                color: var(--text);
+                font-size: 1.2rem;
+                font-weight: 800;
+                line-height: 1.2;
+            }
+
+            .chat-subtitle {
+                color: var(--muted);
+                font-size: 0.86rem;
+                margin-top: 0.15rem;
+            }
+
+            .status-row {
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 0.45rem;
                 flex-wrap: wrap;
-                margin: 0.4rem auto 2.7rem;
             }
 
             .status-pill {
                 display: inline-flex;
                 align-items: center;
-                min-height: 1.85rem;
-                padding: 0.34rem 0.72rem;
+                min-height: 1.75rem;
+                padding: 0.3rem 0.66rem;
                 border: 1px solid var(--border);
                 border-radius: 999px;
-                background: rgba(255, 255, 255, 0.82);
+                background: rgba(255, 255, 255, 0.86);
                 color: var(--muted);
-                box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
-                font-size: 0.78rem;
+                font-size: 0.76rem;
                 font-weight: 700;
-                line-height: 1;
                 white-space: nowrap;
             }
 
             .status-pill.connected {
                 border-color: #BFDBFE;
-                background: var(--soft-blue);
-                color: var(--primary-strong);
+                background: var(--primary-soft);
+                color: #1D4ED8;
             }
 
-            .hero {
-                max-width: 820px;
-                margin: 0 auto 1.35rem;
+            .empty-state {
+                display: flex;
+                min-height: 52vh;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
                 text-align: center;
             }
 
-            .orb {
-                width: 4.3rem;
-                height: 4.3rem;
-                margin: 0 auto 1.3rem;
+            .empty-orb {
+                width: 3.4rem;
+                height: 3.4rem;
+                margin-bottom: 1rem;
                 border-radius: 999px;
                 background:
-                    radial-gradient(circle at 32% 22%, rgba(255, 255, 255, 0.96), transparent 26%),
-                    radial-gradient(circle at 36% 70%, rgba(125, 211, 252, 0.82), transparent 35%),
-                    radial-gradient(circle at 68% 38%, rgba(124, 58, 237, 0.78), transparent 42%),
-                    radial-gradient(circle at 76% 76%, rgba(37, 99, 235, 0.45), transparent 45%);
-                filter: blur(0.15px);
-                box-shadow: 0 18px 50px rgba(99, 102, 241, 0.24);
+                    radial-gradient(circle at 32% 22%, rgba(255, 255, 255, 0.95), transparent 28%),
+                    radial-gradient(circle at 38% 72%, rgba(125, 211, 252, 0.82), transparent 38%),
+                    radial-gradient(circle at 68% 40%, rgba(124, 58, 237, 0.72), transparent 43%),
+                    radial-gradient(circle at 76% 76%, rgba(37, 99, 235, 0.42), transparent 45%);
+                box-shadow: 0 16px 42px rgba(99, 102, 241, 0.22);
             }
 
-            .hero h1 {
+            .empty-state h1 {
                 color: var(--text);
-                font-size: 2.85rem;
-                line-height: 1.1;
-                font-weight: 780;
+                font-size: 2rem;
+                font-weight: 800;
                 letter-spacing: 0;
-                margin: 0 0 0.72rem;
+                margin: 0 0 0.4rem;
             }
 
-            .hero p {
+            .empty-state p {
                 color: var(--muted);
-                font-size: 1rem;
-                line-height: 1.65;
-                max-width: 680px;
-                margin: 0 auto;
-            }
-
-            .composer-shell {
-                max-width: 820px;
-                margin: 1.65rem auto 0;
-                border: 1px solid rgba(226, 232, 240, 0.95);
-                border-radius: 26px;
-                background: rgba(255, 255, 255, 0.9);
-                box-shadow: var(--shadow);
-                overflow: hidden;
-            }
-
-            .composer-top {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                gap: 0.75rem;
-                padding: 0.82rem 1rem 0.2rem;
-                color: var(--muted);
-                font-size: 0.82rem;
-                font-weight: 700;
-            }
-
-            [data-testid="stForm"] {
-                max-width: 820px;
-                margin: 0 auto;
-                border: 1px solid rgba(226, 232, 240, 0.95);
-                border-top: 0;
-                border-radius: 0 0 26px 26px;
-                background: rgba(255, 255, 255, 0.9);
-                box-shadow: var(--shadow);
-                padding: 0.45rem 0.95rem 0.9rem;
-            }
-
-            textarea,
-            textarea:focus,
-            [data-testid="stForm"] textarea,
-            [data-baseweb="textarea"] textarea {
-                min-height: 128px;
-                border: 1px solid #EDF2F7 !important;
-                border-radius: 18px !important;
-                box-shadow: none !important;
-                background: #FFFFFF !important;
-                color: var(--text) !important;
-                font-size: 1rem !important;
-                padding: 0.85rem !important;
-            }
-
-            [data-testid="stForm"] [data-testid="stFormSubmitButton"] button {
-                min-height: 2.25rem;
-                border: 1px solid var(--border);
-                border-radius: 999px;
-                background: #FFFFFF;
-                color: var(--text);
-                font-size: 0.84rem;
-                font-weight: 750;
-            }
-
-            [data-testid="stForm"] [data-testid="stFormSubmitButton"]:last-child button {
-                border-color: var(--primary);
-                background: var(--primary);
-                color: #FFFFFF;
-            }
-
-            .quick-actions {
-                max-width: 820px;
-                margin: 1rem auto 0;
-            }
-
-            .quick-actions div.stButton > button {
-                min-height: 2.55rem;
-                border-radius: 999px;
-                border: 1px solid var(--border);
-                background: rgba(255, 255, 255, 0.84);
-                color: var(--text);
-                box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
-                font-size: 0.88rem;
-                font-weight: 700;
-            }
-
-            .quick-actions div.stButton > button:hover {
-                border-color: #C7D2FE;
-                background: #F8FAFF;
-                color: var(--primary-strong);
+                margin: 0;
             }
 
             .chat-history {
-                max-width: 860px;
-                margin: 2.25rem auto 0;
+                padding: 1rem 0 1.2rem;
+            }
+
+            [data-testid="stChatMessage"] {
+                border: 1px solid var(--border);
+                border-radius: 16px;
+                background: #FFFFFF;
+                box-shadow: var(--shadow);
+                padding: 0.6rem 0.75rem;
+                margin-bottom: 0.85rem;
             }
 
             .user-bubble {
-                max-width: 72%;
+                max-width: 74%;
                 margin: 0 0 0.85rem auto;
                 padding: 0.72rem 0.9rem;
                 border: 1px solid #BFDBFE;
-                border-radius: 18px 18px 4px 18px;
-                background: #EFF6FF;
+                border-radius: 16px 16px 4px 16px;
+                background: var(--primary-soft);
                 color: var(--text);
-                box-shadow: 0 10px 26px rgba(37, 99, 235, 0.08);
+                box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
                 white-space: pre-wrap;
             }
 
             .assistant-bubble {
                 max-width: 84%;
-                margin: 0 auto 0.9rem 0;
-                padding: 0.84rem 0.98rem;
+                margin: 0 auto 0.85rem 0;
+                padding: 0.84rem 0.96rem;
                 border: 1px solid var(--border);
-                border-radius: 18px 18px 18px 4px;
-                background: rgba(255, 255, 255, 0.95);
+                border-radius: 16px 16px 16px 4px;
+                background: #FFFFFF;
                 color: var(--text);
-                box-shadow: 0 12px 34px rgba(15, 23, 42, 0.055);
+                box-shadow: var(--shadow);
                 white-space: pre-wrap;
             }
 
-            [data-testid="stChatMessage"] {
-                border: 1px solid var(--border);
-                border-radius: 18px;
-                background: rgba(255, 255, 255, 0.92);
-                box-shadow: 0 12px 34px rgba(15, 23, 42, 0.055);
-                padding: 0.58rem 0.74rem;
-                margin-bottom: 0.9rem;
+            .composer-actions {
+                margin-top: 0.6rem;
+                padding: 0.7rem 0 0.25rem;
+                border-top: 1px solid rgba(226, 232, 240, 0.65);
             }
 
-            .message-card,
-            .empty-card,
-            .setup-card,
-            .debug-card {
+            .composer-actions div.stButton > button {
+                min-height: 2.2rem;
+                border-radius: 999px;
                 border: 1px solid var(--border);
-                border-radius: 18px;
-                background: rgba(255, 255, 255, 0.92);
-                box-shadow: 0 12px 34px rgba(15, 23, 42, 0.055);
-                padding: 0.95rem 1rem;
-                margin: 0.8rem 0;
-            }
-
-            .empty-card h3,
-            .setup-card h3,
-            .debug-card h3 {
+                background: rgba(255, 255, 255, 0.9);
                 color: var(--text);
-                font-size: 1rem;
-                margin: 0 0 0.25rem;
+                font-size: 0.82rem;
+                font-weight: 700;
+                box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
             }
 
-            .muted {
-                color: var(--muted);
+            .composer-actions div.stButton > button:hover,
+            div.stButton > button:hover {
+                border-color: #BFDBFE;
+                background: var(--primary-soft);
+                color: #1D4ED8;
             }
 
             div.stButton > button,
@@ -378,24 +292,28 @@ def load_css() -> None:
                 font-weight: 700;
             }
 
-            div.stButton > button:hover {
-                border-color: #BFDBFE;
-                color: var(--primary-strong);
-                background: var(--soft-blue);
+            .debug-note {
+                color: var(--muted);
+                font-size: 0.82rem;
             }
 
-            @media (max-width: 920px) {
+            @media (max-width: 900px) {
                 .block-container {
-                    padding: 0.75rem 1rem 2rem;
+                    padding: 0.75rem 1rem 6rem;
                 }
 
-                .hero h1 {
-                    font-size: 2.1rem;
+                .chat-header-row {
+                    align-items: flex-start;
+                    flex-direction: column;
                 }
 
-                .top-status {
+                .status-row {
                     justify-content: flex-start;
-                    margin-bottom: 1.8rem;
+                }
+
+                .user-bubble,
+                .assistant-bubble {
+                    max-width: 96%;
                 }
             }
         </style>
@@ -461,17 +379,14 @@ def validate_secrets() -> dict[str, str]:
             f"""
             <div class="sidebar-brand">
                 {render_tokai_logo()}
-                <div class="sidebar-brand-copy">
+                <div>
                     <div class="sidebar-brand-title">{html.escape(BRAND_NAME)}</div>
-                    <div class="sidebar-brand-subtitle">Toki-chan setup</div>
+                    <div class="sidebar-brand-subtitle">Setup required</div>
                 </div>
             </div>
-            <div class="setup-card">
-                <h3>Setup Required</h3>
-                <div class="muted">
-                    Add the missing Streamlit Secrets below, then redeploy or rerun the app.
-                    Secrets are intentionally not read from source code.
-                </div>
+            <div class="assistant-bubble">
+                <strong>Setup Required</strong><br>
+                Add the missing Streamlit Secrets below, then redeploy or rerun the app.
             </div>
             """,
             unsafe_allow_html=True,
@@ -490,8 +405,16 @@ def login_gate() -> None:
     if st.session_state.authenticated:
         return
 
-    render_main_status({"AWS_REGION": "Not connected", "HARNESS_ARN": ""})
-    render_hero()
+    st.markdown(
+        f"""
+        <div class="empty-state">
+            <div class="empty-orb"></div>
+            <h1>{html.escape(APP_TITLE)}</h1>
+            <p>{html.escape(APP_SUBTITLE)}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     password = st.text_input("Password", type="password")
     if st.button("Login", type="primary", use_container_width=True):
         if password == app_password:
@@ -508,7 +431,7 @@ def init_session() -> None:
     st.session_state.setdefault("pending_context", None)
     st.session_state.setdefault("last_event_summary", [])
     st.session_state.setdefault("last_invocation_error", None)
-    st.session_state.setdefault("show_short_session_id", False)
+    st.session_state.setdefault("uploaded_context", None)
 
 
 def build_prompt(user_prompt: str, uploaded_context: str | None = None) -> str:
@@ -632,41 +555,29 @@ def read_uploaded_text(uploaded_file: Any) -> tuple[str, bool]:
     return text[:MAX_UPLOAD_CHARS], truncated
 
 
-def queue_prompt(prompt: str, context: str | None = None) -> None:
-    st.session_state.pending_prompt = prompt
-    st.session_state.pending_context = context
+def send_message(user_prompt: str, uploaded_context: str | None = None) -> None:
+    prompt = user_prompt.strip()
+    if not prompt:
+        return
+
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    final_prompt = build_prompt(prompt, uploaded_context)
+    with st.spinner("Thinking..."):
+        output = invoke_harness(final_prompt)
+    st.session_state.messages.append({"role": "assistant", "content": output})
+    st.session_state.uploaded_context = None
+    st.rerun()
 
 
-def render_debug_expander(secrets: dict[str, str]) -> None:
-    with st.expander("Debug", expanded=False):
-        try:
-            client = create_agentcore_client(secrets)
-            method_available = hasattr(client, "invoke_harness")
-        except Exception:
-            method_available = False
-
-        st.caption("Sensitive values are masked. Access keys, secret keys, and tokens are never displayed.")
-        st.json(
-            {
-                "region": secrets["AWS_REGION"],
-                "harness_arn_short": shorten(secrets["HARNESS_ARN"], 18, 8),
-                "runtime_session_id": st.session_state.runtime_session_id,
-                "invoke_harness_available": method_available,
-                "last_invocation_error": st.session_state.last_invocation_error,
-                "last_event_summary": st.session_state.last_event_summary,
-            }
-        )
-
-
-def render_sidebar(secrets: dict[str, str]) -> dict[str, Any]:
+def render_sidebar(secrets: dict[str, str]) -> None:
     with st.sidebar:
         st.markdown(
             f"""
             <div class="sidebar-brand">
                 {render_tokai_logo("tokai-logo-sidebar")}
-                <div class="sidebar-brand-copy">
+                <div>
                     <div class="sidebar-brand-title">{html.escape(BRAND_NAME)}</div>
-                    <div class="sidebar-brand-subtitle">Toki-chan Assistant</div>
+                    <div class="sidebar-brand-subtitle">Toki-chan</div>
                 </div>
             </div>
             """,
@@ -678,16 +589,17 @@ def render_sidebar(secrets: dict[str, str]) -> dict[str, Any]:
             st.session_state.runtime_session_id = str(uuid.uuid4())
             st.session_state.messages = []
             st.session_state.last_event_summary = []
+            st.session_state.uploaded_context = None
             st.rerun()
         if st.button("Clear Chat", use_container_width=True):
             st.session_state.messages = []
             st.rerun()
 
         st.markdown('<div class="sidebar-section">Upload Context</div>', unsafe_allow_html=True)
-        uploaded_context = None
         uploaded_file = st.file_uploader("Upload Context", type=["txt", "md", "csv", "json", "py", "log"])
         if uploaded_file:
             uploaded_context, truncated = read_uploaded_text(uploaded_file)
+            st.session_state.uploaded_context = uploaded_context
             size_kb = len(uploaded_file.getvalue()) / 1024
             st.caption(f"{uploaded_file.name} - {size_kb:.1f} KB")
             if truncated:
@@ -697,157 +609,104 @@ def render_sidebar(secrets: dict[str, str]) -> dict[str, Any]:
 
         st.markdown('<div class="sidebar-section">Memory</div>', unsafe_allow_html=True)
         if st.button("What do you remember?", use_container_width=True):
-            queue_prompt("Retrieve and summarize relevant safe memory context.")
+            send_message("Retrieve and summarize relevant safe memory context.")
 
-        preference = st.text_area("Remember preference", height=84, placeholder="Example: I prefer short weekly summaries.")
-        if st.button("Remember preference", use_container_width=True):
+        preference = st.text_area("Preference to remember", height=84, placeholder="Example: I prefer short weekly summaries.")
+        if st.button("Remember", use_container_width=True):
             if preference.strip():
-                queue_prompt(f"Store this as safe reusable memory if appropriate. Do not store secrets or confidential data: {preference.strip()}")
+                send_message(
+                    "Store this as safe reusable memory if appropriate. "
+                    f"Do not store secrets or confidential data: {preference.strip()}"
+                )
             else:
                 st.warning("Add a preference first.")
 
         forget_target = st.text_input("Forget / mark inactive", placeholder="Optional memory or preference")
         if st.button("Forget / Mark inactive", use_container_width=True):
-            target = forget_target.strip() or "the relevant preference I previously asked you to remember"
-            queue_prompt(f"Forget or mark inactive this memory/preference if supported: {target}")
+            target = forget_target.strip() or "the relevant memory/preference"
+            send_message(f"Forget or mark inactive this memory/preference if supported: {target}")
 
         st.markdown('<div class="sidebar-section">Debug</div>', unsafe_allow_html=True)
-        render_debug_expander(secrets)
+        with st.expander("Debug", expanded=False):
+            try:
+                client = create_agentcore_client(secrets)
+                method_available = hasattr(client, "invoke_harness")
+            except Exception:
+                method_available = False
+
+            st.markdown('<div class="debug-note">Sensitive values are masked.</div>', unsafe_allow_html=True)
+            st.json(
+                {
+                    "region": secrets["AWS_REGION"],
+                    "harness_arn_short": shorten(secrets["HARNESS_ARN"], 18, 8),
+                    "runtime_session_id": st.session_state.runtime_session_id,
+                    "invoke_harness_available": method_available,
+                    "last_invocation_error": st.session_state.last_invocation_error,
+                    "last_event_summary": st.session_state.last_event_summary,
+                }
+            )
 
         st.markdown('<div class="sidebar-section">Account</div>', unsafe_allow_html=True)
         if st.button("Logout", use_container_width=True):
             st.session_state.authenticated = False
             st.rerun()
 
-    return {"uploaded_context": uploaded_context, "region": secrets["AWS_REGION"]}
 
-
-def render_main_status(secrets: dict[str, str]) -> None:
+def render_header(secrets: dict[str, str]) -> None:
     region = secrets.get("AWS_REGION", "Not configured")
-    session_short = shorten(st.session_state.get("runtime_session_id", ""), 8, 4)
-    connected_label = "AgentCore Connected" if secrets.get("HARNESS_ARN") else "AgentCore Not Configured"
+    session_short = shorten(st.session_state.runtime_session_id, 8, 4)
 
     st.markdown(
         f"""
-        <div class="top-status">
-            <span class="status-pill connected">{html.escape(connected_label)}</span>
-            <span class="status-pill">{html.escape(region)}</span>
-            <span class="status-pill">Session: {html.escape(session_short)}</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def render_hero() -> None:
-    st.markdown(
-        f"""
-        <section class="hero">
-            <div class="orb"></div>
-            <h1>{html.escape(APP_TITLE)}</h1>
-            <p>{html.escape(APP_SUBTITLE)}</p>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def process_user_prompt(user_prompt: str, uploaded_context: str | None = None) -> None:
-    st.session_state.messages.append({"role": "user", "content": user_prompt})
-    final_prompt = build_prompt(user_prompt, uploaded_context)
-    with st.spinner("Thinking..."):
-        output = invoke_harness(final_prompt)
-    st.session_state.messages.append({"role": "assistant", "content": output})
-    st.rerun()
-
-
-def render_composer(uploaded_context: str | None) -> None:
-    st.markdown(
-        """
-        <div class="composer-shell">
-            <div class="composer-top">
-                <span>Ask me anything or tell me what to remember</span>
-                <span>Memory-aware</span>
+        <div class="chat-header">
+            <div class="chat-header-row">
+                <div>
+                    <div class="chat-title">{html.escape(APP_TITLE)}</div>
+                    <div class="chat-subtitle">{html.escape(APP_SUBTITLE)}</div>
+                </div>
+                <div class="status-row">
+                    <span class="status-pill connected">AgentCore Connected</span>
+                    <span class="status-pill">{html.escape(region)}</span>
+                    <span class="status-pill">Session: {html.escape(session_short)}</span>
+                </div>
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    with st.form("assistant_composer", clear_on_submit=True):
-        prompt = st.text_area(
-            "Ask Toki-chan",
-            placeholder="Ask me anything or tell me what to remember...",
-            label_visibility="collapsed",
-        )
-        remember_col, recall_col, forget_col, summarize_col, draft_col, send_col = st.columns([1, 1.25, 1, 1, 1, 0.9])
-        with remember_col:
-            remember_clicked = st.form_submit_button("Remember", use_container_width=True)
-        with recall_col:
-            recall_clicked = st.form_submit_button("Recall Memory", use_container_width=True)
-        with forget_col:
-            forget_clicked = st.form_submit_button("Forget", use_container_width=True)
-        with summarize_col:
-            summarize_clicked = st.form_submit_button("Summarize", use_container_width=True)
-        with draft_col:
-            draft_clicked = st.form_submit_button("Draft", use_container_width=True)
-        with send_col:
-            send_clicked = st.form_submit_button("Send", use_container_width=True)
-
-    text = prompt.strip()
-    if send_clicked and text:
-        process_user_prompt(text, uploaded_context)
-    elif remember_clicked and text:
-        process_user_prompt(f"Store this as safe reusable memory if appropriate. Do not store secrets or confidential data: {text}", uploaded_context)
-    elif recall_clicked:
-        process_user_prompt("Retrieve and summarize relevant safe memory context.", uploaded_context)
-    elif forget_clicked and text:
-        process_user_prompt(f"Forget or mark inactive this memory/preference if supported: {text}", uploaded_context)
-    elif summarize_clicked and text:
-        process_user_prompt(f"Summarize this clearly and concisely: {text}", uploaded_context)
-    elif draft_clicked and text:
-        process_user_prompt(f"Draft a clear, polished message from this context: {text}", uploaded_context)
-    elif (remember_clicked or forget_clicked or summarize_clicked or draft_clicked) and not text:
-        st.warning("Add text in the composer first.")
-
-
-def render_quick_actions(uploaded_context: str | None) -> None:
-    st.markdown('<div class="quick-actions">', unsafe_allow_html=True)
-    columns = st.columns([1, 1, 1])
-    for index, (label, instruction) in enumerate(QUICK_ACTIONS):
-        with columns[index % 3]:
-            context = uploaded_context if label == "Summarize this" else None
-            if st.button(label, key=f"quick_{index}", use_container_width=True):
-                process_user_prompt(instruction, context)
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_chat_history() -> None:
+    st.markdown('<main class="chat-history">', unsafe_allow_html=True)
     if not st.session_state.messages:
-        return
+        st.markdown(
+            """
+            <div class="empty-state">
+                <div class="empty-orb"></div>
+                <h1>Ask Toki-chan anything</h1>
+                <p>Start a conversation or use a memory action.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        for message in st.session_state.messages:
+            content = str(message["content"])
+            if message["role"] == "user":
+                st.markdown(f'<div class="user-bubble">{html.escape(content)}</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="assistant-bubble">{html.escape(content)}</div>', unsafe_allow_html=True)
+    st.markdown("</main>", unsafe_allow_html=True)
 
-    st.markdown('<section class="chat-history">', unsafe_allow_html=True)
-    for message in st.session_state.messages:
-        content = str(message["content"])
-        if message["role"] == "user":
-            st.markdown(f'<div class="user-bubble">{html.escape(content)}</div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div class="assistant-bubble">{html.escape(content)}</div>', unsafe_allow_html=True)
-    st.markdown("</section>", unsafe_allow_html=True)
 
-
-def render_chat(uploaded_context: str | None = None) -> None:
-    pending_prompt = st.session_state.pending_prompt
-    pending_context = st.session_state.pending_context
-    if pending_prompt:
-        st.session_state.pending_prompt = None
-        st.session_state.pending_context = None
-        process_user_prompt(pending_prompt, pending_context)
-        return
-
-    render_hero()
-    render_composer(uploaded_context)
-    render_quick_actions(uploaded_context)
-    render_chat_history()
+def render_quick_actions() -> None:
+    st.markdown('<div class="composer-actions">', unsafe_allow_html=True)
+    columns = st.columns(5)
+    for column, (label, prompt) in zip(columns, QUICK_ACTIONS.items()):
+        with column:
+            if st.button(label, use_container_width=True):
+                send_message(prompt)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def main() -> None:
@@ -861,9 +720,14 @@ def main() -> None:
     login_gate()
     init_session()
     secrets = validate_secrets()
-    controls = render_sidebar(secrets)
-    render_main_status(secrets)
-    render_chat(controls["uploaded_context"])
+    render_sidebar(secrets)
+    render_header(secrets)
+    render_chat_history()
+    render_quick_actions()
+
+    prompt = st.chat_input("Ask anything or tell Toki-chan what to remember...")
+    if prompt:
+        send_message(prompt, st.session_state.get("uploaded_context"))
 
 
 if __name__ == "__main__":
