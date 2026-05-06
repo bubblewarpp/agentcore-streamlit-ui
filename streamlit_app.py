@@ -9,18 +9,16 @@ import streamlit as st
 
 
 APP_TITLE = "Ask Toki-chan anything"
-APP_SUBTITLE = (
-    "Enterprise AI assistant for AWS architecture, proposal review, troubleshooting, "
-    "and memory-aware workflows."
-)
+APP_SUBTITLE = "Your memory-aware personal AI assistant."
 BRAND_NAME = "TOKAICOM Mitra Indonesia"
 MAX_UPLOAD_CHARS = 20_000
 
 ASSISTANT_INSTRUCTION = (
-    "You are Toki-chan, a personal AI assistant with strong AWS Solution Architect specialization. "
-    "Help with AWS architecture, proposal review, pricing assumptions, troubleshooting, documentation, "
-    "and safe memory-aware assistance. Keep answers concise, practical, structured, and enterprise-friendly. "
-    "Do not store or expose secrets, credentials, tokens, passwords, private keys, or confidential data."
+    "You are Toki-chan, a helpful personal AI assistant with AgentCore Memory support. "
+    "Help the user with general work, notes, summaries, drafts, planning, and safe memory-aware assistance. "
+    "You may also help with AWS topics when asked, but do not force AWS framing. "
+    "Keep answers concise, practical, and clear. "
+    "Never store or expose secrets, credentials, tokens, passwords, private keys, or confidential data."
 )
 
 REQUIRED_SECRETS = (
@@ -32,24 +30,24 @@ REQUIRED_SECRETS = (
 
 QUICK_ACTIONS = [
     (
-        "Review AWS proposal",
-        "Review this AWS proposal: identify risks, gaps, assumptions, pricing concerns, architecture issues, and readiness improvements.",
-    ),
-    (
-        "Check architecture vs pricing",
-        "Check the architecture against pricing assumptions. Highlight mismatches, cost drivers, caveats, and optimization options.",
-    ),
-    (
-        "Create troubleshooting checklist",
-        "Create a troubleshooting checklist with symptoms, likely causes, validation checks, console areas or commands to inspect, and recommended fixes.",
-    ),
-    (
-        "Generate Notion documentation",
-        "Generate clean Notion-ready documentation with headings, concise sections, and tables where useful.",
+        "Remember this",
+        "Help me capture a safe reusable memory. Ask what to remember if I have not provided the detail.",
     ),
     (
         "What do you remember?",
-        "Please recall what safe preferences or durable memories you have about me. Do not reveal secrets or sensitive data.",
+        "Retrieve and summarize relevant safe memory context.",
+    ),
+    (
+        "Forget a preference",
+        "Help me forget or mark inactive a memory or preference. Ask which memory if I have not provided it.",
+    ),
+    (
+        "Summarize this",
+        "Summarize the provided text or uploaded context clearly and concisely.",
+    ),
+    (
+        "Draft a message",
+        "Help me draft a clear, polished message. Ask for recipient, goal, and tone if needed.",
     ),
 ]
 
@@ -240,7 +238,7 @@ def load_css() -> None:
                 align-items: center;
                 justify-content: space-between;
                 gap: 0.75rem;
-                padding: 0.82rem 1rem 0;
+                padding: 0.82rem 1rem 0.2rem;
                 color: var(--muted);
                 font-size: 0.82rem;
                 font-weight: 700;
@@ -257,22 +255,34 @@ def load_css() -> None:
                 padding: 0.45rem 0.95rem 0.9rem;
             }
 
-            [data-testid="stForm"] textarea {
+            textarea,
+            textarea:focus,
+            [data-testid="stForm"] textarea,
+            [data-baseweb="textarea"] textarea {
                 min-height: 128px;
-                border: 0 !important;
+                border: 1px solid #EDF2F7 !important;
+                border-radius: 18px !important;
                 box-shadow: none !important;
-                background: transparent !important;
+                background: #FFFFFF !important;
                 color: var(--text) !important;
                 font-size: 1rem !important;
+                padding: 0.85rem !important;
             }
 
             [data-testid="stForm"] [data-testid="stFormSubmitButton"] button {
-                min-height: 2.45rem;
-                border: 1px solid var(--primary);
+                min-height: 2.25rem;
+                border: 1px solid var(--border);
                 border-radius: 999px;
-                background: linear-gradient(135deg, var(--primary), var(--lavender));
+                background: #FFFFFF;
+                color: var(--text);
+                font-size: 0.84rem;
+                font-weight: 750;
+            }
+
+            [data-testid="stForm"] [data-testid="stFormSubmitButton"]:last-child button {
+                border-color: var(--primary);
+                background: var(--primary);
                 color: #FFFFFF;
-                font-weight: 800;
             }
 
             .quick-actions {
@@ -300,6 +310,30 @@ def load_css() -> None:
             .chat-history {
                 max-width: 860px;
                 margin: 2.25rem auto 0;
+            }
+
+            .user-bubble {
+                max-width: 72%;
+                margin: 0 0 0.85rem auto;
+                padding: 0.72rem 0.9rem;
+                border: 1px solid #BFDBFE;
+                border-radius: 18px 18px 4px 18px;
+                background: #EFF6FF;
+                color: var(--text);
+                box-shadow: 0 10px 26px rgba(37, 99, 235, 0.08);
+                white-space: pre-wrap;
+            }
+
+            .assistant-bubble {
+                max-width: 84%;
+                margin: 0 auto 0.9rem 0;
+                padding: 0.84rem 0.98rem;
+                border: 1px solid var(--border);
+                border-radius: 18px 18px 18px 4px;
+                background: rgba(255, 255, 255, 0.95);
+                color: var(--text);
+                box-shadow: 0 12px 34px rgba(15, 23, 42, 0.055);
+                white-space: pre-wrap;
             }
 
             [data-testid="stChatMessage"] {
@@ -489,8 +523,7 @@ def build_prompt(user_prompt: str, uploaded_context: str | None = None) -> str:
 
     return (
         f"{ASSISTANT_INSTRUCTION}\n\n"
-        "Respond in Indonesian or English following the user's message. "
-        "Use Notion-ready formatting only when the user asks for documentation.\n\n"
+        "Respond in Indonesian or English following the user's message.\n\n"
         f"User request:\n{user_prompt.strip()}"
         f"{context_block}"
     )
@@ -641,7 +674,7 @@ def render_sidebar(secrets: dict[str, str]) -> dict[str, Any]:
         )
 
         st.markdown('<div class="sidebar-section">Session</div>', unsafe_allow_html=True)
-        if st.button("New Session", use_container_width=True):
+        if st.button("New Chat", use_container_width=True):
             st.session_state.runtime_session_id = str(uuid.uuid4())
             st.session_state.messages = []
             st.session_state.last_event_summary = []
@@ -650,9 +683,9 @@ def render_sidebar(secrets: dict[str, str]) -> dict[str, Any]:
             st.session_state.messages = []
             st.rerun()
 
-        st.markdown('<div class="sidebar-section">File Upload</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-section">Upload Context</div>', unsafe_allow_html=True)
         uploaded_context = None
-        uploaded_file = st.file_uploader("Attach context", type=["txt", "md", "csv", "json", "py", "log"])
+        uploaded_file = st.file_uploader("Upload Context", type=["txt", "md", "csv", "json", "py", "log"])
         if uploaded_file:
             uploaded_context, truncated = read_uploaded_text(uploaded_file)
             size_kb = len(uploaded_file.getvalue()) / 1024
@@ -664,25 +697,19 @@ def render_sidebar(secrets: dict[str, str]) -> dict[str, Any]:
 
         st.markdown('<div class="sidebar-section">Memory</div>', unsafe_allow_html=True)
         if st.button("What do you remember?", use_container_width=True):
-            queue_prompt(
-                "Please recall what safe preferences or durable memories you have about me. "
-                "Do not reveal secrets or sensitive data."
-            )
+            queue_prompt("Retrieve and summarize relevant safe memory context.")
 
-        preference = st.text_area("Preference to remember", height=84, placeholder="Example: Prefer concise AWS diagrams.")
-        if st.button("Remember", use_container_width=True):
+        preference = st.text_area("Remember preference", height=84, placeholder="Example: I prefer short weekly summaries.")
+        if st.button("Remember preference", use_container_width=True):
             if preference.strip():
-                queue_prompt(
-                    "Please remember this safe, non-sensitive preference for future help. "
-                    f"Preference: {preference.strip()}"
-                )
+                queue_prompt(f"Store this as safe reusable memory if appropriate. Do not store secrets or confidential data: {preference.strip()}")
             else:
                 st.warning("Add a preference first.")
 
         forget_target = st.text_input("Forget / mark inactive", placeholder="Optional memory or preference")
         if st.button("Forget / Mark inactive", use_container_width=True):
             target = forget_target.strip() or "the relevant preference I previously asked you to remember"
-            queue_prompt(f"Please forget or mark inactive: {target}. If this is ambiguous, ask one clarifying question.")
+            queue_prompt(f"Forget or mark inactive this memory/preference if supported: {target}")
 
         st.markdown('<div class="sidebar-section">Debug</div>', unsafe_allow_html=True)
         render_debug_expander(secrets)
@@ -728,7 +755,7 @@ def render_hero() -> None:
 def process_user_prompt(user_prompt: str, uploaded_context: str | None = None) -> None:
     st.session_state.messages.append({"role": "user", "content": user_prompt})
     final_prompt = build_prompt(user_prompt, uploaded_context)
-    with st.spinner("Invoking AgentCore Harness..."):
+    with st.spinner("Thinking..."):
         output = invoke_harness(final_prompt)
     st.session_state.messages.append({"role": "assistant", "content": output})
     st.rerun()
@@ -739,8 +766,8 @@ def render_composer(uploaded_context: str | None) -> None:
         """
         <div class="composer-shell">
             <div class="composer-top">
-                <span>Initiate a query or send a command to Toki-chan</span>
-                <span>AgentCore Harness</span>
+                <span>Ask me anything or tell me what to remember</span>
+                <span>Memory-aware</span>
             </div>
         </div>
         """,
@@ -749,13 +776,38 @@ def render_composer(uploaded_context: str | None) -> None:
     with st.form("assistant_composer", clear_on_submit=True):
         prompt = st.text_area(
             "Ask Toki-chan",
-            placeholder="Ask Toki-chan to review a proposal, estimate AWS cost, or troubleshoot an issue...",
+            placeholder="Ask me anything or tell me what to remember...",
             label_visibility="collapsed",
         )
-        submitted = st.form_submit_button("Send", use_container_width=True)
+        remember_col, recall_col, forget_col, summarize_col, draft_col, send_col = st.columns([1, 1.25, 1, 1, 1, 0.9])
+        with remember_col:
+            remember_clicked = st.form_submit_button("Remember", use_container_width=True)
+        with recall_col:
+            recall_clicked = st.form_submit_button("Recall Memory", use_container_width=True)
+        with forget_col:
+            forget_clicked = st.form_submit_button("Forget", use_container_width=True)
+        with summarize_col:
+            summarize_clicked = st.form_submit_button("Summarize", use_container_width=True)
+        with draft_col:
+            draft_clicked = st.form_submit_button("Draft", use_container_width=True)
+        with send_col:
+            send_clicked = st.form_submit_button("Send", use_container_width=True)
 
-    if submitted and prompt.strip():
-        process_user_prompt(prompt.strip(), uploaded_context)
+    text = prompt.strip()
+    if send_clicked and text:
+        process_user_prompt(text, uploaded_context)
+    elif remember_clicked and text:
+        process_user_prompt(f"Store this as safe reusable memory if appropriate. Do not store secrets or confidential data: {text}", uploaded_context)
+    elif recall_clicked:
+        process_user_prompt("Retrieve and summarize relevant safe memory context.", uploaded_context)
+    elif forget_clicked and text:
+        process_user_prompt(f"Forget or mark inactive this memory/preference if supported: {text}", uploaded_context)
+    elif summarize_clicked and text:
+        process_user_prompt(f"Summarize this clearly and concisely: {text}", uploaded_context)
+    elif draft_clicked and text:
+        process_user_prompt(f"Draft a clear, polished message from this context: {text}", uploaded_context)
+    elif (remember_clicked or forget_clicked or summarize_clicked or draft_clicked) and not text:
+        st.warning("Add text in the composer first.")
 
 
 def render_quick_actions(uploaded_context: str | None) -> None:
@@ -763,28 +815,23 @@ def render_quick_actions(uploaded_context: str | None) -> None:
     columns = st.columns([1, 1, 1])
     for index, (label, instruction) in enumerate(QUICK_ACTIONS):
         with columns[index % 3]:
-            context = None if label == "What do you remember?" else uploaded_context
+            context = uploaded_context if label == "Summarize this" else None
             if st.button(label, key=f"quick_{index}", use_container_width=True):
                 process_user_prompt(instruction, context)
     st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_chat_history() -> None:
-    st.markdown('<section class="chat-history">', unsafe_allow_html=True)
     if not st.session_state.messages:
-        st.markdown(
-            """
-            <div class="empty-card">
-                <h3>Start with a question or choose a quick action.</h3>
-                <div class="muted">Your conversation will appear here after Toki-chan responds.</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    else:
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.write(message["content"])
+        return
+
+    st.markdown('<section class="chat-history">', unsafe_allow_html=True)
+    for message in st.session_state.messages:
+        content = str(message["content"])
+        if message["role"] == "user":
+            st.markdown(f'<div class="user-bubble">{html.escape(content)}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="assistant-bubble">{html.escape(content)}</div>', unsafe_allow_html=True)
     st.markdown("</section>", unsafe_allow_html=True)
 
 
