@@ -18,6 +18,8 @@ ASSISTANT_INSTRUCTION = (
     "Help the user with general work, notes, summaries, drafts, planning, and safe memory-aware assistance. "
     "You may also help with AWS topics when asked, but do not force AWS framing. "
     "Keep answers concise, practical, and clear. "
+    "Do not greet or address the user by a stored name unless the user provides that name in the current conversation "
+    "or explicitly asks you to use it. "
     "Never store or expose secrets, credentials, tokens, passwords, private keys, or confidential data."
 )
 
@@ -29,11 +31,11 @@ REQUIRED_SECRETS = (
 )
 
 QUICK_ACTIONS = {
-    "Remember this": "Store this as safe reusable memory if appropriate. Do not store secrets or confidential data: ",
-    "Recall memory": "Retrieve and summarize relevant safe memory context.",
-    "Forget": "Forget or mark inactive this memory/preference if supported: ",
-    "Summarize": "Summarize this clearly and concisely.",
-    "Draft": "Draft a clear, polished message. Ask for recipient, goal, and tone if needed.",
+    "Attach": "Use the uploaded context for this request, if one is available.",
+    "Search": "Search your available knowledge and answer this clearly: ",
+    "Reasoning": "Think through this carefully and show the key reasoning steps: ",
+    "Create Image": "Help me draft a detailed image prompt for: ",
+    "Deep Research": "Create a concise research brief with sources to check for: ",
 }
 
 
@@ -42,14 +44,17 @@ def load_css() -> None:
         """
         <style>
             :root {
-                --bg: #F8FAFC;
+                --bg: #F5F7FB;
+                --panel: #FAFBFE;
                 --card: #FFFFFF;
-                --primary: #2563EB;
-                --primary-soft: #EFF6FF;
-                --text: #0F172A;
-                --muted: #64748B;
-                --border: #E2E8F0;
-                --shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+                --primary: #635BFF;
+                --primary-soft: #F0EFFF;
+                --text: #24262D;
+                --muted: #80848E;
+                --faint: #B8BCC7;
+                --border: #E9ECF2;
+                --shadow: 0 18px 46px rgba(36, 38, 45, 0.06);
+                --soft-shadow: 0 8px 22px rgba(36, 38, 45, 0.05);
             }
 
             header[data-testid="stHeader"],
@@ -61,27 +66,48 @@ def load_css() -> None:
             }
 
             .stApp {
-                background:
-                    radial-gradient(circle at 50% 2rem, rgba(124, 58, 237, 0.12), transparent 16rem),
-                    radial-gradient(circle at 74% 18rem, rgba(37, 99, 235, 0.10), transparent 18rem),
-                    var(--bg);
+                background: var(--bg);
                 color: var(--text);
             }
 
             .block-container {
-                max-width: 980px;
+                max-width: 100%;
                 min-height: 100vh;
-                padding: 1rem 1.6rem 6rem;
+                padding: 1rem 1.35rem 2.5rem;
+            }
+
+            [data-testid="stAppViewContainer"] {
+                display: flex !important;
             }
 
             [data-testid="stSidebar"] {
-                width: 19rem;
-                border-right: 1px solid var(--border);
-                background: #FFFFFF;
+                width: 18rem !important;
+                min-width: 18rem !important;
+                max-width: 18rem !important;
+                left: 0 !important;
+                transform: translateX(0) !important;
+                position: relative !important;
+                border-right: 1px solid rgba(233, 236, 242, 0.82);
+                background: rgba(255, 255, 255, 0.86);
+                box-shadow: 10px 0 40px rgba(36, 38, 45, 0.03);
+            }
+
+            [data-testid="stSidebarContent"],
+            [data-testid="stSidebarUserContent"] {
+                width: 18rem !important;
+                min-width: 18rem !important;
+                max-width: 18rem !important;
+                left: 0 !important;
+                transform: translateX(0) !important;
+            }
+
+            [data-testid="stAppViewContainer"] > .main {
+                flex: 1 1 auto !important;
+                min-width: 0 !important;
             }
 
             [data-testid="stSidebar"] > div:first-child {
-                padding: 1.1rem 0.95rem;
+                padding: 1.25rem 0.9rem 1rem;
             }
 
             [data-testid="stSidebar"] label,
@@ -91,31 +117,30 @@ def load_css() -> None:
             }
 
             .sidebar-section {
-                color: var(--text);
-                font-size: 0.74rem;
-                font-weight: 800;
-                letter-spacing: 0.08em;
-                margin: 1rem 0 0.35rem;
-                text-transform: uppercase;
+                color: #A2A6B1;
+                font-size: 0.8rem;
+                font-weight: 600;
+                letter-spacing: 0;
+                margin: 1.25rem 0 0.5rem;
             }
 
             .sidebar-brand {
                 display: flex;
                 align-items: center;
-                gap: 0.6rem;
-                margin-bottom: 0.8rem;
+                gap: 0.65rem;
+                margin: 0.4rem 0 1.15rem;
             }
 
             .sidebar-brand-title {
                 color: var(--text);
-                font-size: 0.88rem;
+                font-size: 0.94rem;
                 font-weight: 800;
                 line-height: 1.2;
             }
 
             .sidebar-brand-subtitle {
                 color: var(--muted);
-                font-size: 0.74rem;
+                font-size: 0.76rem;
                 margin-top: 0.1rem;
             }
 
@@ -126,17 +151,82 @@ def load_css() -> None:
             }
 
             .tokai-logo-sidebar {
-                width: 5.9rem;
+                width: 8.4rem;
+                flex: 0 0 auto;
             }
 
-            .chat-header {
-                position: sticky;
-                top: 0;
-                z-index: 5;
-                padding: 0.75rem 0 0.85rem;
-                background: linear-gradient(180deg, rgba(248, 250, 252, 0.97), rgba(248, 250, 252, 0.86));
-                backdrop-filter: blur(12px);
-                border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+            .st-key-sidebar_search input {
+                border-radius: 12px !important;
+                border: 1px solid var(--border) !important;
+                background: #FFFFFF !important;
+                box-shadow: var(--soft-shadow);
+                min-height: 2.45rem;
+                font-size: 0.82rem !important;
+            }
+
+            .sidebar-nav {
+                display: grid;
+                gap: 0.25rem;
+                margin: 0.9rem 0 1rem;
+            }
+
+            .sidebar-nav-item {
+                display: flex;
+                align-items: center;
+                gap: 0.62rem;
+                min-height: 2.1rem;
+                padding: 0.3rem 0.55rem;
+                border-radius: 8px;
+                color: #6E737E;
+                font-size: 0.86rem;
+                font-weight: 500;
+            }
+
+            .sidebar-nav-item.active {
+                background: #F4F6FA;
+                color: var(--text);
+                font-weight: 700;
+            }
+
+            .sidebar-nav-icon {
+                width: 1rem;
+                color: #9AA0AC;
+                text-align: center;
+            }
+
+            .sidebar-recent {
+                display: grid;
+                gap: 0.65rem;
+                margin-bottom: 0.75rem;
+            }
+
+            .sidebar-recent-item {
+                overflow: hidden;
+                color: #858995;
+                font-size: 0.82rem;
+                line-height: 1.3;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .sidebar-compact-actions {
+                margin-top: 1rem;
+            }
+
+            .st-key-app_frame {
+                min-height: calc(100vh - 2rem);
+                border: 1px solid rgba(233, 236, 242, 0.9);
+                border-radius: 14px;
+                background:
+                    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.95)),
+                    var(--panel);
+                box-shadow: 0 22px 70px rgba(36, 38, 45, 0.07);
+                overflow: hidden;
+            }
+
+            .st-key-chat_header {
+                padding: 1.35rem 1.65rem 0.5rem;
+                background: transparent;
             }
 
             .chat-header-row {
@@ -148,15 +238,42 @@ def load_css() -> None:
 
             .chat-title {
                 color: var(--text);
-                font-size: 1.2rem;
-                font-weight: 800;
+                font-size: 0.9rem;
+                font-weight: 750;
                 line-height: 1.2;
             }
 
             .chat-subtitle {
                 color: var(--muted);
+                font-size: 0.74rem;
+                margin-top: 0.1rem;
+            }
+
+            .model-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.5rem;
+                min-height: 2.15rem;
+                padding: 0.24rem 0.7rem;
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                background: #FFFFFF;
+                color: var(--text);
+                box-shadow: var(--soft-shadow);
                 font-size: 0.86rem;
-                margin-top: 0.15rem;
+                font-weight: 700;
+            }
+
+            .model-dot {
+                display: inline-grid;
+                place-items: center;
+                width: 1.25rem;
+                height: 1.25rem;
+                border-radius: 999px;
+                background: var(--primary);
+                color: #FFFFFF;
+                font-size: 0.72rem;
+                font-weight: 800;
             }
 
             .status-row {
@@ -170,60 +287,65 @@ def load_css() -> None:
             .status-pill {
                 display: inline-flex;
                 align-items: center;
-                min-height: 1.75rem;
-                padding: 0.3rem 0.66rem;
+                min-height: 1.8rem;
+                padding: 0.25rem 0.6rem;
                 border: 1px solid var(--border);
-                border-radius: 999px;
+                border-radius: 8px;
                 background: rgba(255, 255, 255, 0.86);
                 color: var(--muted);
-                font-size: 0.76rem;
+                font-size: 0.74rem;
                 font-weight: 700;
                 white-space: nowrap;
             }
 
             .status-pill.connected {
-                border-color: #BFDBFE;
+                border-color: #D6D4FF;
                 background: var(--primary-soft);
-                color: #1D4ED8;
+                color: #5048E5;
             }
 
             .empty-state {
                 display: flex;
-                min-height: 52vh;
+                min-height: 36vh;
                 flex-direction: column;
                 align-items: center;
-                justify-content: center;
+                justify-content: flex-end;
                 text-align: center;
+                padding: 4.2rem 1rem 2rem;
             }
 
-            .empty-orb {
-                width: 3.4rem;
-                height: 3.4rem;
-                margin-bottom: 1rem;
-                border-radius: 999px;
-                background:
-                    radial-gradient(circle at 32% 22%, rgba(255, 255, 255, 0.95), transparent 28%),
-                    radial-gradient(circle at 38% 72%, rgba(125, 211, 252, 0.82), transparent 38%),
-                    radial-gradient(circle at 68% 40%, rgba(124, 58, 237, 0.72), transparent 43%),
-                    radial-gradient(circle at 76% 76%, rgba(37, 99, 235, 0.42), transparent 45%);
-                box-shadow: 0 16px 42px rgba(99, 102, 241, 0.22);
+            .assistant-mark {
+                display: inline-grid;
+                place-items: center;
+                width: 3.1rem;
+                height: 3.1rem;
+                margin-bottom: 1.05rem;
+                border: 1px solid #DFDFFF;
+                border-radius: 14px;
+                background: #FFFFFF;
+                color: var(--primary);
+                box-shadow: 0 14px 34px rgba(99, 91, 255, 0.15);
+                font-size: 1.2rem;
+                font-weight: 800;
             }
 
             .empty-state h1 {
                 color: var(--text);
-                font-size: 2rem;
-                font-weight: 800;
+                font-size: 1.72rem;
+                font-weight: 760;
                 letter-spacing: 0;
-                margin: 0 0 0.4rem;
+                margin: 0;
+                line-height: 1.24;
             }
 
-            .empty-state p {
-                color: var(--muted);
-                margin: 0;
+            .empty-state .accent {
+                color: var(--primary);
             }
 
             .chat-history {
-                padding: 1rem 0 1.2rem;
+                width: min(58rem, calc(100% - 3rem));
+                margin: 0 auto;
+                padding: 0.7rem 0 1rem;
             }
 
             [data-testid="stChatMessage"] {
@@ -239,11 +361,11 @@ def load_css() -> None:
                 max-width: 74%;
                 margin: 0 0 0.85rem auto;
                 padding: 0.72rem 0.9rem;
-                border: 1px solid #BFDBFE;
-                border-radius: 16px 16px 4px 16px;
+                border: 1px solid #D6D4FF;
+                border-radius: 14px 14px 4px 14px;
                 background: var(--primary-soft);
                 color: var(--text);
-                box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
+                box-shadow: 0 10px 24px rgba(99, 91, 255, 0.08);
                 white-space: pre-wrap;
             }
 
@@ -252,44 +374,108 @@ def load_css() -> None:
                 margin: 0 auto 0.85rem 0;
                 padding: 0.84rem 0.96rem;
                 border: 1px solid var(--border);
-                border-radius: 16px 16px 16px 4px;
+                border-radius: 14px 14px 14px 4px;
                 background: #FFFFFF;
                 color: var(--text);
                 box-shadow: var(--shadow);
                 white-space: pre-wrap;
             }
 
-            .composer-actions {
-                margin-top: 0.6rem;
-                padding: 0.7rem 0 0.25rem;
-                border-top: 1px solid rgba(226, 232, 240, 0.65);
+            .st-key-message_composer {
+                width: min(46rem, calc(100% - 3rem));
+                margin: 0 auto 2.8rem;
             }
 
-            .composer-actions div.stButton > button {
-                min-height: 2.2rem;
-                border-radius: 999px;
+            .st-key-message_composer [data-testid="stForm"] {
+                padding: 0.78rem 0.9rem 0.7rem;
+                border: 1px solid var(--border);
+                border-radius: 14px;
+                background: rgba(255, 255, 255, 0.92);
+                box-shadow: 0 18px 44px rgba(36, 38, 45, 0.08);
+            }
+
+            .st-key-message_composer textarea {
+                min-height: 6.2rem !important;
+                border: 0 !important;
+                background: transparent !important;
+                color: var(--text) !important;
+                box-shadow: none !important;
+                font-size: 0.92rem !important;
+                resize: none !important;
+            }
+
+            .st-key-message_composer textarea::placeholder {
+                color: #777C88 !important;
+            }
+
+            .st-key-message_composer [data-baseweb="textarea"],
+            .st-key-message_composer [data-baseweb="textarea"] > div {
+                border: 0 !important;
+                background: transparent !important;
+                box-shadow: none !important;
+            }
+
+            .st-key-message_composer div[data-testid="stFormSubmitButton"] > button {
+                min-height: 2.25rem;
+                border-radius: 10px;
+                background: var(--primary);
+                border-color: var(--primary);
+                color: #FFFFFF;
+                box-shadow: 0 9px 18px rgba(99, 91, 255, 0.18);
+                font-weight: 750;
+            }
+
+            .composer-hint {
+                color: var(--faint);
+                font-size: 0.78rem;
+                margin: -0.2rem 0 0.65rem;
+            }
+
+            .st-key-composer_actions {
+                width: min(46rem, calc(100% - 3rem));
+                margin: -4.45rem auto 2.8rem;
+                padding: 0 0.85rem;
+                position: relative;
+                z-index: 2;
+            }
+
+            .st-key-composer_actions div.stButton > button {
+                min-height: 1.95rem;
+                border-radius: 8px;
                 border: 1px solid var(--border);
                 background: rgba(255, 255, 255, 0.9);
                 color: var(--text);
-                font-size: 0.82rem;
-                font-weight: 700;
-                box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+                font-size: 0.74rem;
+                font-weight: 650;
+                box-shadow: 0 6px 15px rgba(36, 38, 45, 0.04);
+                white-space: nowrap;
             }
 
-            .composer-actions div.stButton > button:hover,
+            .st-key-composer_actions div.stButton > button:hover,
             div.stButton > button:hover {
-                border-color: #BFDBFE;
+                border-color: #D6D4FF;
                 background: var(--primary-soft);
-                color: #1D4ED8;
+                color: #5048E5;
             }
 
             div.stButton > button,
             div.stDownloadButton > button {
                 border: 1px solid var(--border);
-                border-radius: 10px;
+                border-radius: 9px;
                 background: #FFFFFF;
                 color: var(--text);
                 font-weight: 700;
+            }
+
+            .st-key-top_new_chat button {
+                width: auto;
+                min-height: 2.2rem;
+                padding: 0.25rem 0.85rem;
+                border-radius: 9px;
+                border-color: #101115;
+                background: #101115;
+                color: #FFFFFF;
+                box-shadow: 0 10px 22px rgba(16, 17, 21, 0.16);
             }
 
             .debug-note {
@@ -299,7 +485,16 @@ def load_css() -> None:
 
             @media (max-width: 900px) {
                 .block-container {
-                    padding: 0.75rem 1rem 6rem;
+                    padding: 0.75rem;
+                }
+
+                .st-key-app_frame {
+                    min-height: calc(100vh - 1.5rem);
+                    border-radius: 12px;
+                }
+
+                .st-key-chat_header {
+                    padding: 1rem 1rem 0.25rem;
                 }
 
                 .chat-header-row {
@@ -314,6 +509,25 @@ def load_css() -> None:
                 .user-bubble,
                 .assistant-bubble {
                     max-width: 96%;
+                }
+
+                .empty-state {
+                    min-height: 32vh;
+                    padding-top: 2.25rem;
+                }
+
+                .empty-state h1 {
+                    font-size: 1.38rem;
+                }
+
+                .st-key-message_composer,
+                .st-key-composer_actions,
+                .chat-history {
+                    width: calc(100% - 1.5rem);
+                }
+
+                .st-key-composer_actions {
+                    margin-top: -4.2rem;
                 }
             }
         </style>
@@ -569,64 +783,96 @@ def send_message(user_prompt: str, uploaded_context: str | None = None) -> None:
     st.rerun()
 
 
+def reset_chat() -> None:
+    st.session_state.runtime_session_id = str(uuid.uuid4())
+    st.session_state.messages = []
+    st.session_state.last_event_summary = []
+    st.session_state.last_invocation_error = None
+    st.session_state.uploaded_context = None
+
+
 def render_sidebar(secrets: dict[str, str]) -> None:
     with st.sidebar:
         st.markdown(
             f"""
             <div class="sidebar-brand">
                 {render_tokai_logo("tokai-logo-sidebar")}
-                <div>
-                    <div class="sidebar-brand-title">{html.escape(BRAND_NAME)}</div>
-                    <div class="sidebar-brand-subtitle">Toki-chan</div>
-                </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        st.markdown('<div class="sidebar-section">Session</div>', unsafe_allow_html=True)
+        with st.container(key="sidebar_search"):
+            st.text_input("Search", placeholder="Search", label_visibility="collapsed")
+
+        st.markdown(
+            """
+            <div class="sidebar-nav">
+                <div class="sidebar-nav-item active"><span class="sidebar-nav-icon">H</span>Home</div>
+                <div class="sidebar-nav-item"><span class="sidebar-nav-icon">E</span>Explore</div>
+                <div class="sidebar-nav-item"><span class="sidebar-nav-icon">L</span>Library</div>
+                <div class="sidebar-nav-item"><span class="sidebar-nav-icon">R</span>History</div>
+            </div>
+            <div class="sidebar-section">Tomorrow</div>
+            <div class="sidebar-recent">
+                <div class="sidebar-recent-item">What's something you've learned...</div>
+                <div class="sidebar-recent-item">If you could teleport anywhere...</div>
+                <div class="sidebar-recent-item">What's one goal you want to ac...</div>
+            </div>
+            <div class="sidebar-section">7 Days Ago</div>
+            <div class="sidebar-recent">
+                <div class="sidebar-recent-item">Ask me anything weird or rand...</div>
+                <div class="sidebar-recent-item">How are you feeling today, reall...</div>
+                <div class="sidebar-recent-item">What's one habit you wish you...</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown('<div class="sidebar-compact-actions">', unsafe_allow_html=True)
         if st.button("New Chat", use_container_width=True):
-            st.session_state.runtime_session_id = str(uuid.uuid4())
-            st.session_state.messages = []
-            st.session_state.last_event_summary = []
-            st.session_state.uploaded_context = None
+            reset_chat()
             st.rerun()
         if st.button("Clear Chat", use_container_width=True):
             st.session_state.messages = []
             st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown('<div class="sidebar-section">Upload Context</div>', unsafe_allow_html=True)
-        uploaded_file = st.file_uploader("Upload Context", type=["txt", "md", "csv", "json", "py", "log"])
-        if uploaded_file:
-            uploaded_context, truncated = read_uploaded_text(uploaded_file)
-            st.session_state.uploaded_context = uploaded_context
-            size_kb = len(uploaded_file.getvalue()) / 1024
-            st.caption(f"{uploaded_file.name} - {size_kb:.1f} KB")
-            if truncated:
-                st.caption(f"Limited to {MAX_UPLOAD_CHARS:,} characters.")
-            with st.expander("Preview", expanded=False):
-                st.text(uploaded_context[:3_000])
+        with st.expander("Upload Context", expanded=False):
+            uploaded_file = st.file_uploader("Upload Context", type=["txt", "md", "csv", "json", "py", "log"])
+            if uploaded_file:
+                uploaded_context, truncated = read_uploaded_text(uploaded_file)
+                st.session_state.uploaded_context = uploaded_context
+                size_kb = len(uploaded_file.getvalue()) / 1024
+                st.caption(f"{uploaded_file.name} - {size_kb:.1f} KB")
+                if truncated:
+                    st.caption(f"Limited to {MAX_UPLOAD_CHARS:,} characters.")
+                with st.expander("Preview", expanded=False):
+                    st.text(uploaded_context[:3_000])
 
-        st.markdown('<div class="sidebar-section">Memory</div>', unsafe_allow_html=True)
-        if st.button("What do you remember?", use_container_width=True):
-            send_message("Retrieve and summarize relevant safe memory context.")
+        with st.expander("Memory", expanded=False):
+            if st.button("What do you remember?", use_container_width=True):
+                send_message("Retrieve and summarize relevant safe memory context.")
 
-        preference = st.text_area("Preference to remember", height=84, placeholder="Example: I prefer short weekly summaries.")
-        if st.button("Remember", use_container_width=True):
-            if preference.strip():
-                send_message(
-                    "Store this as safe reusable memory if appropriate. "
-                    f"Do not store secrets or confidential data: {preference.strip()}"
-                )
-            else:
-                st.warning("Add a preference first.")
+            preference = st.text_area(
+                "Preference to remember",
+                height=84,
+                placeholder="Example: I prefer short weekly summaries.",
+            )
+            if st.button("Remember", use_container_width=True):
+                if preference.strip():
+                    send_message(
+                        "Store this as safe reusable memory if appropriate. "
+                        f"Do not store secrets or confidential data: {preference.strip()}"
+                    )
+                else:
+                    st.warning("Add a preference first.")
 
-        forget_target = st.text_input("Forget / mark inactive", placeholder="Optional memory or preference")
-        if st.button("Forget / Mark inactive", use_container_width=True):
-            target = forget_target.strip() or "the relevant memory/preference"
-            send_message(f"Forget or mark inactive this memory/preference if supported: {target}")
+            forget_target = st.text_input("Forget / mark inactive", placeholder="Optional memory or preference")
+            if st.button("Forget / Mark inactive", use_container_width=True):
+                target = forget_target.strip() or "the relevant memory/preference"
+                send_message(f"Forget or mark inactive this memory/preference if supported: {target}")
 
-        st.markdown('<div class="sidebar-section">Debug</div>', unsafe_allow_html=True)
         with st.expander("Debug", expanded=False):
             try:
                 client = create_agentcore_client(secrets)
@@ -646,34 +892,45 @@ def render_sidebar(secrets: dict[str, str]) -> None:
                 }
             )
 
-        st.markdown('<div class="sidebar-section">Account</div>', unsafe_allow_html=True)
-        if st.button("Logout", use_container_width=True):
-            st.session_state.authenticated = False
-            st.rerun()
+        with st.expander("Account", expanded=False):
+            if st.button("Logout", use_container_width=True):
+                st.session_state.authenticated = False
+                st.rerun()
 
 
 def render_header(secrets: dict[str, str]) -> None:
     region = secrets.get("AWS_REGION", "Not configured")
     session_short = shorten(st.session_state.runtime_session_id, 8, 4)
 
-    st.markdown(
-        f"""
-        <div class="chat-header">
-            <div class="chat-header-row">
-                <div>
-                    <div class="chat-title">{html.escape(APP_TITLE)}</div>
-                    <div class="chat-subtitle">{html.escape(APP_SUBTITLE)}</div>
+    with st.container(key="chat_header"):
+        left, right = st.columns([1, 1], vertical_alignment="center")
+        with left:
+            st.markdown(
+                f"""
+                <div class="model-pill">
+                    <span class="model-dot">T</span>
+                    <span>{html.escape(APP_TITLE)} 4o</span>
                 </div>
-                <div class="status-row">
-                    <span class="status-pill connected">AgentCore Connected</span>
-                    <span class="status-pill">{html.escape(region)}</span>
-                    <span class="status-pill">Session: {html.escape(session_short)}</span>
-                </div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+                """,
+                unsafe_allow_html=True,
+            )
+        with right:
+            status_col, button_col = st.columns([0.78, 0.22], vertical_alignment="center")
+            with status_col:
+                st.markdown(
+                    f"""
+                    <div class="status-row">
+                        <span class="status-pill connected">AgentCore</span>
+                        <span class="status-pill">{html.escape(region)}</span>
+                        <span class="status-pill">{html.escape(session_short)}</span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            with button_col:
+                if st.button("New Chat", key="top_new_chat"):
+                    reset_chat()
+                    st.rerun()
 
 
 def render_chat_history() -> None:
@@ -682,9 +939,8 @@ def render_chat_history() -> None:
         st.markdown(
             """
             <div class="empty-state">
-                <div class="empty-orb"></div>
-                <h1>Ask Toki-chan anything</h1>
-                <p>Start a conversation or use a memory action.</p>
+                <div class="assistant-mark">T</div>
+                <h1>Good Morning<br>How Can I <span class="accent">Assist You Today?</span></h1>
             </div>
             """,
             unsafe_allow_html=True,
@@ -699,14 +955,33 @@ def render_chat_history() -> None:
     st.markdown("</main>", unsafe_allow_html=True)
 
 
+def render_composer() -> None:
+    uploaded_context = st.session_state.get("uploaded_context")
+    with st.container(key="message_composer"):
+        with st.form("message_composer_form", clear_on_submit=True):
+            if uploaded_context:
+                st.markdown(
+                    '<div class="composer-hint">Uploaded context is ready for the next message.</div>',
+                    unsafe_allow_html=True,
+                )
+            prompt = st.text_area(
+                "Message",
+                placeholder="Initiate a query or send a command to the AI...",
+                label_visibility="collapsed",
+            )
+            submitted = st.form_submit_button("Send")
+
+    if submitted and prompt:
+        send_message(prompt, uploaded_context)
+
+
 def render_quick_actions() -> None:
-    st.markdown('<div class="composer-actions">', unsafe_allow_html=True)
-    columns = st.columns(5)
-    for column, (label, prompt) in zip(columns, QUICK_ACTIONS.items()):
-        with column:
-            if st.button(label, use_container_width=True):
-                send_message(prompt)
-    st.markdown("</div>", unsafe_allow_html=True)
+    with st.container(key="composer_actions"):
+        columns = st.columns(5)
+        for column, (label, prompt) in zip(columns, QUICK_ACTIONS.items()):
+            with column:
+                if st.button(label, use_container_width=True):
+                    send_message(prompt)
 
 
 def main() -> None:
@@ -721,13 +996,11 @@ def main() -> None:
     init_session()
     secrets = validate_secrets()
     render_sidebar(secrets)
-    render_header(secrets)
-    render_chat_history()
-    render_quick_actions()
-
-    prompt = st.chat_input("Ask anything or tell Toki-chan what to remember...")
-    if prompt:
-        send_message(prompt, st.session_state.get("uploaded_context"))
+    with st.container(key="app_frame"):
+        render_header(secrets)
+        render_chat_history()
+        render_composer()
+        render_quick_actions()
 
 
 if __name__ == "__main__":
