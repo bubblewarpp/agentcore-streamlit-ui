@@ -394,22 +394,28 @@ def load_css() -> None:
                 box-shadow: 0 18px 44px rgba(36, 38, 45, 0.08);
             }
 
-            .st-key-message_composer textarea {
+            .st-key-message_composer [data-testid="stTextInputRootElement"] {
                 min-height: 6.2rem !important;
                 border: 0 !important;
                 background: transparent !important;
-                color: var(--text) !important;
                 box-shadow: none !important;
-                font-size: 0.92rem !important;
-                resize: none !important;
+                align-items: flex-start !important;
+                padding-top: 1.05rem !important;
             }
 
-            .st-key-message_composer textarea::placeholder {
+            .st-key-message_composer input {
+                background: transparent !important;
+                color: var(--text) !important;
+                font-size: 0.92rem !important;
+                line-height: 1.4 !important;
+            }
+
+            .st-key-message_composer input::placeholder {
                 color: #777C88 !important;
             }
 
-            .st-key-message_composer [data-baseweb="textarea"],
-            .st-key-message_composer [data-baseweb="textarea"] > div {
+            .st-key-message_composer [data-baseweb="input"],
+            .st-key-message_composer [data-baseweb="input"] > div {
                 border: 0 !important;
                 background: transparent !important;
                 box-shadow: none !important;
@@ -964,7 +970,7 @@ def render_composer() -> None:
                     '<div class="composer-hint">Uploaded context is ready for the next message.</div>',
                     unsafe_allow_html=True,
                 )
-            prompt = st.text_area(
+            prompt = st.text_input(
                 "Message",
                 placeholder="Initiate a query or send a command to the AI...",
                 label_visibility="collapsed",
